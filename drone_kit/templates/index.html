@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- Add Leaflet Map Library -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2 {
+            color: #1a253c;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        h1 {
+             margin-bottom: 30px;
+        }
+
+        #telemetry {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            border: none;
+            padding: 0;
+        }
+
+        .telemetry-item {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .label {
+            font-weight: 600;
+            color: #555;
+            margin-right: 10px;
+        }
+
+        .value {
+            font-weight: 500;
+            color: #1a73e8;
+            font-size: 1.1em;
+        }
+
+        /* Status indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .status-connected { background-color: #34a853; animation: pulse-green 1.5s infinite; }
+        .status-disconnected { background-color: #ea4335; }
+        .status-armed { background-color: #ea4335; animation: pulse-red 1.5s infinite; }
+        .status-disarmed { background-color: #7f8c8d; }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 168, 83, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 168, 83, 0); }
+        }
+         @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(234, 67, 53, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0); }
+        }
+
+        #controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 5px 10px;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            background-color: #125abc;
+        }
+         button:active {
+             transform: scale(0.98);
+         }
+
+        #commandStatus {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: 500;
+            min-height: 1.2em;
+        }
+        .status-success { color: #34a853; }
+        .status-error { color: #ea4335; }
+        .status-pending { color: #7f8c8d; }
+
+        .connection-status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        /* Map container styles */
+        #map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        /* Drone icon styles */
+        .drone-icon {
+            font-size: 24px;
+            text-align: center;
+            line-height: 24px;
+            color: #ea4335;
+        }
+        
+        /* Flight path styles */
+        .actual-path {
+            stroke: #ea4335;
+            stroke-width: 3;
+            stroke-opacity: 0.7;
+        }
+        
+        .planned-path {
+            stroke: #34a853;
+            stroke-width: 3;
+            stroke-opacity: 0.7;
+            stroke-dasharray: 5, 10;
+        }
+        
+        /* Waypoint styles */
+        .waypoint-icon {
+            color: #34a853;
+            font-weight: bold;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        /* Legend container */
+        .map-legend {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+            font-size: 12px;
+            line-height: 18px;
+        }
+        
+        .legend-item {
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 3px;
+            margin-right: 8px;
+            display: inline-block;
+        }
+        
+        .legend-color.actual {
+            background-color: #ea4335;
+        }
+        
+        .legend-color.planned {
+            background-color: #34a853;
+            height: 3px;
+            border-top: 1px dashed #34a853;
+        }
+        
+        .legend-point {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            display: inline-block;
+            text-align: center;
+            font-size: 12px;
+            line-height: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Drone Dashboard</h1>
+
+        <div class="connection-status">
+            Websocket Status: <span id="ws_status">Connecting...</span>
+            <span id="ws_indicator" class="status-indicator status-disconnected"></span>
+        </div>
+
+        <div id="telemetry">
+            <h2>Live Telemetry</h2>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div class="container">
+        <h2>Mission Planner</h2>
+        <div id="map-container"></div>
+    </div>
+
+    <div class="container">
+        <h2>Commands</h2>
+        <div id="controls">
+            <button id="armButton">Arm</button>
+            <button id="missionButton">Start Mission</button>
+            <button id="rtlButton">Return to Launch</button>
+        </div>
+        <div id="commandStatus" class="status-pending">Awaiting commands...</div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        const wsStatusSpan = document.getElementById('ws_status');
+        const wsIndicatorSpan = document.getElementById('ws_indicator');
+        const telemetryDiv = document.getElementById('telemetry');
+        const commandStatusDiv = document.getElementById('commandStatus');
+
+        // Store telemetry elements dynamically
+        const telemetryElements = {};
+        
+        // Store position history for drawing flight path
+        let positionHistory = [];
+        let homePosition = null;
+        let map = null;
+        let droneMarker = null;
+        let actualPath = null;
+        let plannedPath = null;
+        let waypointMarkers = [];
+        
+        // Mission plan data - Coordinates will be calculated based on the home position
+        let missionPlan = {
+            waypoints: [],
+            displayedOnMap: false
+        };
+
+        // Initialize the map
+        function initMap() {
+            // Create a map centered at a default location (will be updated with actual drone position)
+            map = L.map('map-container').setView([0, 0], 18);
+            
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            // Create a custom drone icon
+            const droneIcon = L.divIcon({
+                className: 'drone-icon',
+                html: '🚁',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            // Create drone marker (will be positioned later)
+            droneMarker = L.marker([0, 0], {icon: droneIcon}).addTo(map);
+            
+            // Create polyline for actual flight path
+            actualPath = L.polyline([], {
+                className: 'actual-path'
+            }).addTo(map);
+            
+            // Create polyline for planned flight path
+            plannedPath = L.polyline([], {
+                className: 'planned-path'
+            }).addTo(map);
+            
+            // Add map legend
+            addMapLegend();
+        }
+        
+        function addMapLegend() {
+            const legend = L.control({position: 'bottomright'});
+            
+            legend.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'map-legend');
+                div.innerHTML = `
+                    <div class="legend-item">
+                        <span class="legend-color planned"></span>
+                        <span>Planned Route</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color actual"></span>
+                        <span>Actual Route</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-point">🏠</span>
+                        <span>Home Position</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-point">🚁</span>
+                        <span>Drone Position</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-point">📍</span>
+                        <span>Waypoint</span>
+                    </div>
+                `;
+                return div;
+            };
+            
+            legend.addTo(map);
+        }
+        
+        // Calculate mission waypoints based on the home position
+        function calculateMissionWaypoints(homeLatLon) {
+            const homePosition = {lat: homeLatLon[0], lon: homeLatLon[1]};
+            
+            // Calculate waypoints based on the mission parameters from your Python code
+            const takeoffAlt = 10.0;
+            const firstLegDist = 30.0;
+            const turnAngleDeg = 30.0;
+            const secondLegDist = 20.0;
+            const finalAlt = 15.0;
+            
+            // Function from your Python code to calculate new positions
+            function getLocationMetres(original, dNorth, dEast) {
+                const earthRadius = 6378137.0;
+                const dLat = dNorth / earthRadius;
+                const dLon = dEast / (earthRadius * Math.cos(Math.PI * original.lat / 180));
+                
+                const newLat = original.lat + (dLat * 180 / Math.PI);
+                const newLon = original.lon + (dLon * 180 / Math.PI);
+                
+                return {lat: newLat, lon: newLon, alt: original.alt};
+            }
+            
+            // Define waypoints based on the mission in your Python code
+            const waypoints = [];
+            
+            // Waypoint 0: Home position/takeoff
+            waypoints.push({
+                lat: homePosition.lat,
+                lon: homePosition.lon,
+                alt: 0,
+                name: "Home/Takeoff"
+            });
+            
+            // Waypoint 1: Ascend to 10m
+            waypoints.push({
+                lat: homePosition.lat,
+                lon: homePosition.lon,
+                alt: takeoffAlt,
+                name: "Takeoff"
+            });
+            
+            // Waypoint 2: First leg - travel 30m in current heading (assume 0°/North for visualization)
+            const heading = 0; // Starting heading (adjust if you have the actual initial heading)
+            const headingRad = heading * Math.PI / 180;
+            const dNorth1 = Math.cos(headingRad) * firstLegDist;
+            const dEast1 = Math.sin(headingRad) * firstLegDist;
+            
+            const waypoint2 = getLocationMetres(homePosition, dNorth1, dEast1);
+            waypoint2.alt = takeoffAlt;
+            waypoint2.name = "First Leg";
+            waypoints.push(waypoint2);
+            
+            // Waypoint 3: After turn - travel 20m in new heading
+            const newHeading = (heading - turnAngleDeg + 360) % 360; // Turn left by 30°
+            const newHeadingRad = newHeading * Math.PI / 180;
+            const dNorth2 = Math.cos(newHeadingRad) * secondLegDist;
+            const dEast2 = Math.sin(newHeadingRad) * secondLegDist;
+            
+            const waypoint3 = getLocationMetres(waypoint2, dNorth2, dEast2);
+            waypoint3.alt = finalAlt;
+            waypoint3.name = "Second Leg";
+            waypoints.push(waypoint3);
+            
+            // Waypoint 4: Return to home
+            waypoints.push({
+                lat: homePosition.lat,
+                lon: homePosition.lon,
+                alt: finalAlt,
+                name: "Return"
+            });
+            
+            return waypoints;
+        }
+        
+        // Display mission plan on the map
+        function displayMissionPlan() {
+            if (!homePosition || missionPlan.displayedOnMap) return;
+            
+            // Calculate waypoints based on home position
+            missionPlan.waypoints = calculateMissionWaypoints(homePosition);
+            
+            // Create waypoint markers
+            missionPlan.waypoints.forEach((waypoint, index) => {
+                // Create waypoint marker
+                const waypointIcon = L.divIcon({
+                    className: 'waypoint-icon',
+                    html: `📍<div style="font-size:10px;margin-top:-5px;">${index}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 24]
+                });
+                
+                const marker = L.marker([waypoint.lat, waypoint.lon], {
+                    icon: waypointIcon
+                }).addTo(map);
+                
+                // Add tooltip with waypoint info
+                marker.bindTooltip(`Waypoint ${index}: ${waypoint.name}<br>Alt: ${waypoint.alt}m`);
+                
+                waypointMarkers.push(marker);
+            });
+            
+            // Draw planned path line
+            const pathPoints = missionPlan.waypoints.map(wp => [wp.lat, wp.lon]);
+            plannedPath.setLatLngs(pathPoints);
+            
+            // Fit map bounds to include all waypoints
+            map.fitBounds(plannedPath.getBounds(), {padding: [50, 50]});
+            
+            missionPlan.displayedOnMap = true;
+        }
+
+        function updateTelemetryElement(key, value, unit = '') {
+            const formattedValue = (typeof value === 'number') ? value.toFixed(2) : (value || '--');
+             const displayValue = `${formattedValue}${unit}`;
+
+             if (!telemetryElements[key]) {
+                // Create element if it doesn't exist
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'telemetry-item';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'label';
+                // Simple capitalization for label
+                labelSpan.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ') + ':';
+
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'value';
+                valueSpan.id = `val-${key}`;
+                valueSpan.textContent = displayValue;
+
+                // Special handling for armed status indicator
+                if (key === 'armed') {
+                     const indicatorSpan = document.createElement('span');
+                     indicatorSpan.id = 'armed_indicator';
+                     indicatorSpan.className = 'status-indicator status-disarmed';
+                     valueSpan.appendChild(indicatorSpan);
+                 }
+
+                itemDiv.appendChild(labelSpan);
+                itemDiv.appendChild(valueSpan);
+                telemetryDiv.appendChild(itemDiv);
+                telemetryElements[key] = valueSpan;
+            } else {
+                 if (key === 'armed') {
+                     const indicator = telemetryElements[key].querySelector('#armed_indicator');
+                     const textNode = telemetryElements[key].firstChild;
+                     textNode.nodeValue = value ? 'Yes ' : 'No ';
+                     if (indicator) {
+                         indicator.className = `status-indicator ${value ? 'status-armed' : 'status-disarmed'}`;
+                     }
+                 } else {
+                     telemetryElements[key].textContent = displayValue;
+                 }
+            }
+        }
+
+        // Update drone position on map
+        function updateDronePosition(lat, lon, heading) {
+            if (!map) return;
+            
+            if (lat && lon) {
+                // Update drone marker position
+                droneMarker.setLatLng([lat, lon]);
+                
+                // Rotate drone marker based on heading (if supported)
+                if (heading !== undefined && droneMarker.setRotationAngle) {
+                    droneMarker.setRotationAngle(heading);
+                }
+                
+                // Add point to position history
+                positionHistory.push([lat, lon]);
+                
+                // Limit history length
+                if (positionHistory.length > 500) {
+                    positionHistory.shift();
+                }
+                
+                // Update actual flight path
+                actualPath.setLatLngs(positionHistory);
+                
+                // Set home position if not already set
+                if (!homePosition) {
+                    homePosition = [lat, lon];
+                    
+                    // Add home marker
+                    const homeIcon = L.divIcon({
+                        className: 'home-marker',
+                        html: '🏠',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    L.marker(homePosition, {icon: homeIcon})
+                        .bindTooltip('Home Position')
+                        .addTo(map);
+                    
+                    // Now that we have a home position, display the mission plan
+                    displayMissionPlan();
+                }
+                
+                // Pan map to follow drone
+                map.panTo([lat, lon]);
+            }
+        }
+
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server');
+            wsStatusSpan.textContent = 'Connected';
+            wsIndicatorSpan.className = 'status-indicator status-connected';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from WebSocket server');
+            wsStatusSpan.textContent = 'Disconnected';
+            wsIndicatorSpan.className = 'status-indicator status-disconnected';
+            // Clear telemetry display
+            Object.keys(telemetryElements).forEach(key => {
+                 if (key !== 'armed') {
+                     telemetryElements[key].textContent = '--';
+                 } else {
+                     const indicator = telemetryElements[key].querySelector('#armed_indicator');
+                     const textNode = telemetryElements[key].firstChild;
+                     textNode.nodeValue = 'No ';
+                     if(indicator) indicator.className = 'status-indicator status-disarmed';
+                 }
+            });
+        });
+
+        socket.on('telemetry_update', (data) => {
+            updateTelemetryElement('latitude', data.latitude);
+            updateTelemetryElement('longitude', data.longitude);
+            updateTelemetryElement('altitude', data.altitude, ' m');
+            updateTelemetryElement('groundspeed', data.groundspeed, ' m/s');
+            updateTelemetryElement('heading', data.heading, '°');
+            updateTelemetryElement('mode', data.mode);
+            updateTelemetryElement('armed', data.armed);
+            updateTelemetryElement('battery_voltage', data.battery_voltage, ' V');
+            updateTelemetryElement('battery_level', data.battery_level, '%');
+            updateTelemetryElement('gps_fix', data.gps_fix);
+            updateTelemetryElement('gps_satellites', data.gps_satellites);
+            updateTelemetryElement('system_status', data.system_status);
+            
+            // Update drone position on map if we have valid GPS coordinates
+            if (data.latitude && data.longitude) {
+                updateDronePosition(data.latitude, data.longitude, data.heading);
+            }
+        });
+
+        // --- Command Buttons ---
+        document.getElementById('armButton').addEventListener('click', () => {
+            sendCommand('/command/arm');
+        });
+
+        document.getElementById('missionButton').addEventListener('click', () => {
+            sendCommand('/command/start_mission');
+        });
+
+        document.getElementById('rtlButton').addEventListener('click', () => {
+            sendCommand('/command/rtl');
+        });
+
+        function sendCommand(endpoint) {
+            commandStatusDiv.textContent = 'Sending command...';
+            commandStatusDiv.className = 'status-pending';
+
+            fetch(endpoint, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Command response:', data);
+                    commandStatusDiv.textContent = `Command ${data.status}: ${data.message}`;
+                    commandStatusDiv.className = data.status === 'success' ? 'status-success' : 'status-error';
+                 })
+                .catch(error => {
+                    console.error('Error sending command:', error);
+                    commandStatusDiv.textContent = 'Error sending command.';
+                    commandStatusDiv.className = 'status-error';
+                });
+        }
+
+        // Initialize map when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+        });
+    </script>
+</body>
+</html>
