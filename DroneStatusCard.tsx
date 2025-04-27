@@ -11,7 +11,7 @@ const DroneStatusCard: React.FC<DroneStatusCardProps> = ({ droneStatus }) => {
   const getBatteryColor = (level: number) => {
     if (level > 70) return 'text-green-500';
     if (level > 30) return 'text-amber-500';
-    return 'text-red-500';
+    return 'text-white-500';
   };
 
   // Helper function to determine status color
