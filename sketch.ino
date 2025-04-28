@@ -2,7 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <RTClib.h>
 
-// Initialize LCD
+// Initializing LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 RTC_DS3231 rtc;
 
