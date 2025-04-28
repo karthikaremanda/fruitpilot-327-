@@ -21,4 +21,4 @@
 - **REST:** `/api/telemetry` (single snapshot)
 
 ## Real DroneKit
-- Uncomment and configure DroneKit lines in `main.py` for real drone connection.
+- Edit the connection string in `main.py` if your drone is not at `127.0.0.1:14550`.
