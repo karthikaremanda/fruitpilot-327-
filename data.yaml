@@ -1,0 +1,21 @@
+
+- YOLO-formatted images and labels
+- Labeled for fruit types and bounding boxes
+
+---
+
+## 📊 Model Training Details
+
+- **Model Used**: YOLOv8n
+- **Input Size**: 640 × 640
+- **Epochs Trained**: 50
+- **Framework**: Ultralytics YOLO
+- **Performance**: High accuracy in varied lighting and environments
+
+---
+
+## 🛠️ How to Use
+
+### 1. Install Dependencies
+```bash
+pip install ultralytics opencv-python
