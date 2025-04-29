@@ -1,5 +1,0 @@
-fastapi
-uvicorn
-pydantic
-# For real drone integration, add:
-# dronekit
