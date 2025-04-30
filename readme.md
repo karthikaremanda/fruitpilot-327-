@@ -86,17 +86,10 @@ Just open `frontend/index.html` in your browser.
 
 ---
 
-## 📸 Sample Output
-
-> Add sample YOLO detection screenshots or drone-in-flight photos here.
-
----
-
 ## 🤖 Future Scope
 
 - Integration with robotic arm for automated picking
 - Multi-fruit detection and classification
-- Solar-powered drone enhancements
 - Real-time yield estimation using AI
 
 ---
